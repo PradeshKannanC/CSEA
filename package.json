@@ -6,7 +6,7 @@
     "dev": "next dev",
     "db": "D:\\xampp\\mysql\\bin\\mysqld.exe --defaults-file=\"D:\\CSEA\\data\\my.ini\"",
     "build": "prisma generate && next build",
-    "start": "next start",
+    "start": "prisma migrate deploy && next start",
     "lint": "next lint",
     "postinstall": "prisma generate",
     "db:seed": "npx tsx prisma/seed.ts"
