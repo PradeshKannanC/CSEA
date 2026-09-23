@@ -1,0 +1,394 @@
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum UserRole {
+  ADMIN
+  TEAM_LEADER
+  TEAM_MEMBER
+  INVESTOR
+}
+
+enum EventStatus {
+  DRAFT
+  OPEN
+  PAUSED
+  CLOSED
+  ADMIN_REVEALED
+  REVEALED
+}
+
+enum IdeaStatus {
+  DRAFT
+  APPROVED
+  REJECTED
+}
+
+enum Velocity {
+  HIGH
+  STABLE
+  MODERATE
+  LOW
+}
+
+enum RoomStatus {
+  DRAFT
+  OPEN
+  PAUSED
+  CLOSED
+  REVEALED
+}
+
+model User {
+  id              String         @id @default(cuid())
+  name            String
+  email           String         @unique
+  passwordHash    String?
+  role            UserRole       @default(INVESTOR)
+  isActive        Boolean        @default(true)
+  emailVerified   Boolean        @default(false)
+  avatarInitials  String
+  title           String?
+  teamId          String?
+  team            Team?          @relation("TeamUsers", fields: [teamId], references: [id])
+  roomId          String?
+  room            Room?          @relation("UserRoom", fields: [roomId], references: [id], onDelete: SetNull)
+  ledTeam         Team?          @relation("TeamLeader")
+  teamMemberships TeamMember[]
+  wallet          Wallet?
+  budgets         ParticipantBudget[]
+  investments     Investment[]
+  sessions        Session[]
+  passwordResetTokens PasswordResetToken[]
+  auditLogs       AuditLog[]
+  issueReports    IdeaIssueReport[]
+  notifications   Notification[]
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  @@index([email])
+  @@index([teamId])
+  @@index([roomId])
+}
+
+model Team {
+  id           String       @id @default(cuid())
+  teamId       String       @unique
+  name         String
+  submissionId String       @unique
+  cohort       String       @default("Alpha 2024")
+  leaderId     String?      @unique
+  leader       User?        @relation("TeamLeader", fields: [leaderId], references: [id])
+  users        User[]       @relation("TeamUsers")
+  roster       TeamMember[]
+  idea         Idea?
+  roomId       String?
+  room         Room?        @relation(fields: [roomId], references: [id], onDelete: SetNull)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  @@index([teamId])
+  @@index([roomId])
+}
+
+model Room {
+  id                 String       @id @default(cuid())
+  name               String
+  code               String
+  description        String?      @db.Text
+  status             RoomStatus   @default(DRAFT)
+  eventId            String?
+  event              Event?       @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  startedAt          DateTime?
+  pausedAt           DateTime?
+  closedAt           DateTime?
+  revealedAt         DateTime?
+  resultsRevealedToAdmins       Boolean   @default(false)
+  resultsRevealedToParticipants Boolean   @default(false)
+  adminRevealedAt               DateTime?
+  participantRevealedAt         DateTime?
+  investmentStartsAt DateTime?
+  investmentEndsAt   DateTime?
+  initialCoins       Int?
+  minInvestment      Int?
+  maxInvestment      Int?
+  version            Int          @default(1)
+  teams              Team[]
+  users              User[]       @relation("UserRoom")
+  ideas              Idea[]
+  investments        Investment[]
+  budgets            ParticipantBudget[]
+  results            Result[]
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+
+  @@unique([eventId, code])
+  @@index([eventId])
+  @@index([code])
+  @@index([status])
+}
+
+model TeamMember {
+  id        String   @id @default(cuid())
+  teamId    String
+  team      Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  email     String
+  name      String
+  role      UserRole @default(TEAM_MEMBER)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([teamId, email])
+  @@index([teamId])
+  @@index([email])
+  @@index([userId])
+}
+
+model Session {
+  id        String   @id
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model Event {
+  id                    String      @id @default(cuid())
+  name                  String      @default("PITCH AND PROSPER Arena 2024")
+  status                EventStatus @default(DRAFT)
+  round                 Int         @default(1)
+  totalCoins            Int         @default(100)
+  minInvestment         Int         @default(10)
+  maxInvestment         Int         @default(50)
+  totalDistributedCoins Int         @default(14200)
+  investmentStartsAt    DateTime?
+  investmentEndsAt      DateTime?
+  revealedAt            DateTime?
+  targetTeamsCount      Int         @default(50)
+  version               Int         @default(1)
+  rooms                 Room[]
+  budgets               ParticipantBudget[]
+  createdAt             DateTime    @default(now())
+  updatedAt             DateTime    @updatedAt
+}
+
+model Idea {
+  id               String       @id @default(cuid())
+  anonymousId      String       @unique
+  teamId           String       @unique
+  team             Team         @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  title            String
+  track            String
+  categoryTag      String
+  problemStatement String       @db.Text
+  solution         String       @db.Text
+  innovation       String       @db.Text
+  impact           String       @db.Text
+  whyInvest        String       @db.Text
+  technology       String       @db.Text
+  status           IdeaStatus   @default(DRAFT)
+  isLocked         Boolean      @default(false)
+  lockedAt         DateTime?
+  submittedAt      DateTime?
+  approvedAt       DateTime?
+  totalInvested    Int          @default(0)
+  investorCount    Int          @default(0)
+  velocity         Velocity     @default(STABLE)
+  rank             Int?
+  roomId           String?
+  room             Room?        @relation(fields: [roomId], references: [id], onDelete: SetNull)
+  investments      Investment[]
+  results          Result[]
+  issueReports     IdeaIssueReport[]
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  @@index([teamId])
+  @@index([anonymousId])
+  @@index([roomId])
+}
+
+model Investment {
+  id         String   @id @default(cuid())
+  eventId    String?
+  roomId     String?
+  room       Room?    @relation(fields: [roomId], references: [id], onDelete: SetNull)
+  investorId String
+  investor   User     @relation(fields: [investorId], references: [id], onDelete: Cascade)
+  ideaId     String
+  idea       Idea     @relation(fields: [ideaId], references: [id], onDelete: Cascade)
+  amount     Int
+  createdAt  DateTime @default(now())
+
+  @@unique([investorId, roomId, ideaId])
+  @@index([eventId])
+  @@index([roomId])
+  @@index([investorId])
+  @@index([ideaId])
+  @@index([investorId, roomId])
+}
+
+model Wallet {
+  id             String              @id @default(cuid())
+  userId         String              @unique
+  user           User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  totalCoins     Int                 @default(100)
+  availableCoins Int                 @default(100)
+  investedCoins  Int                 @default(0)
+  transactions   WalletTransaction[]
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+
+  @@index([userId])
+}
+
+model WalletTransaction {
+  id          String   @id @default(cuid())
+  walletId    String
+  wallet      Wallet   @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  type        String
+  amount      Int
+  referenceId String?
+  createdAt   DateTime @default(now())
+
+  @@index([walletId])
+}
+
+model ParticipantBudget {
+  id             String   @id @default(cuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  roomId         String
+  room           Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  eventId        String?
+  event          Event?   @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  allocatedCoins Int      @default(100)
+  investedCoins  Int      @default(0)
+  availableCoins Int      @default(100)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([userId, roomId])
+  @@index([userId])
+  @@index([roomId])
+  @@index([roomId, userId])
+  @@index([eventId])
+}
+
+model Result {
+  id            String    @id @default(cuid())
+  eventId       String?
+  roomId        String?
+  room          Room?     @relation(fields: [roomId], references: [id], onDelete: SetNull)
+  ideaId        String
+  idea          Idea      @relation(fields: [ideaId], references: [id], onDelete: Cascade)
+  teamId        String?
+  teamCode      String?
+  teamName      String
+  ideaTitle     String?
+  anonymousId   String?
+  rank          Int
+  totalCoins    Int
+  investorCount Int       @default(0)
+  members       Json
+  track         String
+  trophy        String?
+  revealedAt    DateTime?
+  createdAt     DateTime  @default(now())
+
+  @@index([eventId])
+  @@index([roomId])
+  @@index([ideaId])
+  @@index([rank])
+  @@index([roomId, rank])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action    String
+  entity    String
+  entityId  String?
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([action])
+  @@index([entity])
+}
+
+enum IssueReportStatus {
+  OPEN
+  REVIEWED
+  RESOLVED
+}
+
+model IdeaIssueReport {
+  id               String            @id @default(cuid())
+  ideaId           String
+  idea             Idea              @relation(fields: [ideaId], references: [id], onDelete: Cascade)
+  reportedByUserId String
+  reportedByUser   User              @relation(fields: [reportedByUserId], references: [id], onDelete: Cascade)
+  teamId           String
+  issueType        String
+  message          String            @db.Text
+  status           IssueReportStatus @default(OPEN)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  @@index([ideaId])
+  @@index([teamId])
+  @@index([reportedByUserId])
+  @@index([status])
+}
+
+enum NotificationType {
+  IDEA_ISSUE_REPORTED
+  IDEA_STATUS_CHANGED
+  TEAM_UPDATE
+  EVENT_UPDATE
+  SYSTEM
+}
+
+model Notification {
+  id              String           @id @default(cuid())
+  recipientUserId String
+  recipientUser   User             @relation(fields: [recipientUserId], references: [id], onDelete: Cascade)
+  type            NotificationType @default(SYSTEM)
+  title           String
+  message         String           @db.Text
+  relatedEntityId String?
+  isRead          Boolean          @default(false)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  @@index([recipientUserId])
+  @@index([isRead])
+  @@index([createdAt])
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+  @@index([tokenHash])
+  @@index([expiresAt])
+}
+
