@@ -3,19 +3,21 @@ CREATE TABLE `User` (
     `id` VARCHAR(191) NOT NULL,
     `name` VARCHAR(191) NOT NULL,
     `email` VARCHAR(191) NOT NULL,
-    `passwordHash` VARCHAR(191) NOT NULL,
+    `passwordHash` VARCHAR(191) NULL,
     `role` ENUM('ADMIN', 'TEAM_LEADER', 'TEAM_MEMBER', 'INVESTOR') NOT NULL DEFAULT 'INVESTOR',
     `isActive` BOOLEAN NOT NULL DEFAULT true,
     `emailVerified` BOOLEAN NOT NULL DEFAULT false,
     `avatarInitials` VARCHAR(191) NOT NULL,
     `title` VARCHAR(191) NULL,
     `teamId` VARCHAR(191) NULL,
+    `roomId` VARCHAR(191) NULL,
     `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     `updatedAt` DATETIME(3) NOT NULL,
 
     UNIQUE INDEX `User_email_key`(`email`),
     INDEX `User_email_idx`(`email`),
     INDEX `User_teamId_idx`(`teamId`),
+    INDEX `User_roomId_idx`(`roomId`),
     PRIMARY KEY (`id`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
@@ -27,6 +29,7 @@ CREATE TABLE `Team` (
     `submissionId` VARCHAR(191) NOT NULL,
     `cohort` VARCHAR(191) NOT NULL DEFAULT 'Alpha 2024',
     `leaderId` VARCHAR(191) NULL,
+    `roomId` VARCHAR(191) NULL,
     `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     `updatedAt` DATETIME(3) NOT NULL,
 
@@ -34,6 +37,39 @@ CREATE TABLE `Team` (
     UNIQUE INDEX `Team_submissionId_key`(`submissionId`),
     UNIQUE INDEX `Team_leaderId_key`(`leaderId`),
     INDEX `Team_teamId_idx`(`teamId`),
+    INDEX `Team_roomId_idx`(`roomId`),
+    PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
+CREATE TABLE `Room` (
+    `id` VARCHAR(191) NOT NULL,
+    `name` VARCHAR(191) NOT NULL,
+    `code` VARCHAR(191) NOT NULL,
+    `description` TEXT NULL,
+    `status` ENUM('DRAFT', 'OPEN', 'PAUSED', 'CLOSED', 'REVEALED') NOT NULL DEFAULT 'DRAFT',
+    `eventId` VARCHAR(191) NULL,
+    `startedAt` DATETIME(3) NULL,
+    `pausedAt` DATETIME(3) NULL,
+    `closedAt` DATETIME(3) NULL,
+    `revealedAt` DATETIME(3) NULL,
+    `resultsRevealedToAdmins` BOOLEAN NOT NULL DEFAULT false,
+    `resultsRevealedToParticipants` BOOLEAN NOT NULL DEFAULT false,
+    `adminRevealedAt` DATETIME(3) NULL,
+    `participantRevealedAt` DATETIME(3) NULL,
+    `investmentStartsAt` DATETIME(3) NULL,
+    `investmentEndsAt` DATETIME(3) NULL,
+    `initialCoins` INTEGER NULL,
+    `minInvestment` INTEGER NULL,
+    `maxInvestment` INTEGER NULL,
+    `version` INTEGER NOT NULL DEFAULT 1,
+    `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    `updatedAt` DATETIME(3) NOT NULL,
+
+    INDEX `Room_eventId_idx`(`eventId`),
+    INDEX `Room_code_idx`(`code`),
+    INDEX `Room_status_idx`(`status`),
+    UNIQUE INDEX `Room_eventId_code_key`(`eventId`, `code`),
     PRIMARY KEY (`id`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
@@ -81,6 +117,7 @@ CREATE TABLE `Event` (
     `investmentEndsAt` DATETIME(3) NULL,
     `revealedAt` DATETIME(3) NULL,
     `targetTeamsCount` INTEGER NOT NULL DEFAULT 50,
+    `version` INTEGER NOT NULL DEFAULT 1,
     `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     `updatedAt` DATETIME(3) NOT NULL,
 
@@ -110,6 +147,7 @@ CREATE TABLE `Idea` (
     `investorCount` INTEGER NOT NULL DEFAULT 0,
     `velocity` ENUM('HIGH', 'STABLE', 'MODERATE', 'LOW') NOT NULL DEFAULT 'STABLE',
     `rank` INTEGER NULL,
+    `roomId` VARCHAR(191) NULL,
     `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     `updatedAt` DATETIME(3) NOT NULL,
 
@@ -117,6 +155,7 @@ CREATE TABLE `Idea` (
     UNIQUE INDEX `Idea_teamId_key`(`teamId`),
     INDEX `Idea_teamId_idx`(`teamId`),
     INDEX `Idea_anonymousId_idx`(`anonymousId`),
+    INDEX `Idea_roomId_idx`(`roomId`),
     PRIMARY KEY (`id`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
@@ -124,14 +163,18 @@ CREATE TABLE `Idea` (
 CREATE TABLE `Investment` (
     `id` VARCHAR(191) NOT NULL,
     `eventId` VARCHAR(191) NULL,
+    `roomId` VARCHAR(191) NULL,
     `investorId` VARCHAR(191) NOT NULL,
     `ideaId` VARCHAR(191) NOT NULL,
     `amount` INTEGER NOT NULL,
     `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
 
     INDEX `Investment_eventId_idx`(`eventId`),
+    INDEX `Investment_roomId_idx`(`roomId`),
     INDEX `Investment_investorId_idx`(`investorId`),
     INDEX `Investment_ideaId_idx`(`ideaId`),
+    INDEX `Investment_investorId_roomId_idx`(`investorId`, `roomId`),
+    UNIQUE INDEX `Investment_investorId_roomId_ideaId_key`(`investorId`, `roomId`, `ideaId`),
     PRIMARY KEY (`id`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
@@ -164,23 +207,50 @@ CREATE TABLE `WalletTransaction` (
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
+CREATE TABLE `ParticipantBudget` (
+    `id` VARCHAR(191) NOT NULL,
+    `userId` VARCHAR(191) NOT NULL,
+    `roomId` VARCHAR(191) NOT NULL,
+    `eventId` VARCHAR(191) NULL,
+    `allocatedCoins` INTEGER NOT NULL DEFAULT 100,
+    `investedCoins` INTEGER NOT NULL DEFAULT 0,
+    `availableCoins` INTEGER NOT NULL DEFAULT 100,
+    `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    `updatedAt` DATETIME(3) NOT NULL,
+
+    INDEX `ParticipantBudget_userId_idx`(`userId`),
+    INDEX `ParticipantBudget_roomId_idx`(`roomId`),
+    INDEX `ParticipantBudget_roomId_userId_idx`(`roomId`, `userId`),
+    INDEX `ParticipantBudget_eventId_idx`(`eventId`),
+    UNIQUE INDEX `ParticipantBudget_userId_roomId_key`(`userId`, `roomId`),
+    PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
 CREATE TABLE `Result` (
     `id` VARCHAR(191) NOT NULL,
     `eventId` VARCHAR(191) NULL,
+    `roomId` VARCHAR(191) NULL,
     `ideaId` VARCHAR(191) NOT NULL,
+    `teamId` VARCHAR(191) NULL,
+    `teamCode` VARCHAR(191) NULL,
+    `teamName` VARCHAR(191) NOT NULL,
+    `ideaTitle` VARCHAR(191) NULL,
+    `anonymousId` VARCHAR(191) NULL,
     `rank` INTEGER NOT NULL,
     `totalCoins` INTEGER NOT NULL,
     `investorCount` INTEGER NOT NULL DEFAULT 0,
-    `teamName` VARCHAR(191) NOT NULL,
     `members` JSON NOT NULL,
     `track` VARCHAR(191) NOT NULL,
     `trophy` VARCHAR(191) NULL,
-    `revealedAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    `revealedAt` DATETIME(3) NULL,
     `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
 
     INDEX `Result_eventId_idx`(`eventId`),
+    INDEX `Result_roomId_idx`(`roomId`),
     INDEX `Result_ideaId_idx`(`ideaId`),
     INDEX `Result_rank_idx`(`rank`),
+    INDEX `Result_roomId_rank_idx`(`roomId`, `rank`),
     PRIMARY KEY (`id`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
@@ -257,7 +327,16 @@ CREATE TABLE `PasswordResetToken` (
 ALTER TABLE `User` ADD CONSTRAINT `User_teamId_fkey` FOREIGN KEY (`teamId`) REFERENCES `Team`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE `User` ADD CONSTRAINT `User_roomId_fkey` FOREIGN KEY (`roomId`) REFERENCES `Room`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE `Team` ADD CONSTRAINT `Team_leaderId_fkey` FOREIGN KEY (`leaderId`) REFERENCES `User`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `Team` ADD CONSTRAINT `Team_roomId_fkey` FOREIGN KEY (`roomId`) REFERENCES `Room`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `Room` ADD CONSTRAINT `Room_eventId_fkey` FOREIGN KEY (`eventId`) REFERENCES `Event`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE `TeamMember` ADD CONSTRAINT `TeamMember_teamId_fkey` FOREIGN KEY (`teamId`) REFERENCES `Team`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
@@ -272,6 +351,12 @@ ALTER TABLE `Session` ADD CONSTRAINT `Session_userId_fkey` FOREIGN KEY (`userId`
 ALTER TABLE `Idea` ADD CONSTRAINT `Idea_teamId_fkey` FOREIGN KEY (`teamId`) REFERENCES `Team`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE `Idea` ADD CONSTRAINT `Idea_roomId_fkey` FOREIGN KEY (`roomId`) REFERENCES `Room`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `Investment` ADD CONSTRAINT `Investment_roomId_fkey` FOREIGN KEY (`roomId`) REFERENCES `Room`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE `Investment` ADD CONSTRAINT `Investment_investorId_fkey` FOREIGN KEY (`investorId`) REFERENCES `User`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
@@ -282,6 +367,18 @@ ALTER TABLE `Wallet` ADD CONSTRAINT `Wallet_userId_fkey` FOREIGN KEY (`userId`) 
 
 -- AddForeignKey
 ALTER TABLE `WalletTransaction` ADD CONSTRAINT `WalletTransaction_walletId_fkey` FOREIGN KEY (`walletId`) REFERENCES `Wallet`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `ParticipantBudget` ADD CONSTRAINT `ParticipantBudget_userId_fkey` FOREIGN KEY (`userId`) REFERENCES `User`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `ParticipantBudget` ADD CONSTRAINT `ParticipantBudget_roomId_fkey` FOREIGN KEY (`roomId`) REFERENCES `Room`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `ParticipantBudget` ADD CONSTRAINT `ParticipantBudget_eventId_fkey` FOREIGN KEY (`eventId`) REFERENCES `Event`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `Result` ADD CONSTRAINT `Result_roomId_fkey` FOREIGN KEY (`roomId`) REFERENCES `Room`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE `Result` ADD CONSTRAINT `Result_ideaId_fkey` FOREIGN KEY (`ideaId`) REFERENCES `Idea`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
