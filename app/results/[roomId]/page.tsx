@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { motion } from 'framer-motion';
@@ -39,37 +39,57 @@ export default function RoomSpecificResultsPage() {
   const [errorStatus, setErrorStatus] = useState<{ code: string; message: string } | null>(null);
   const [stageIndex, setStageIndex] = useState<number>(0);
 
-  useEffect(() => {
+  const loadRoomResults = useCallback(async () => {
     if (!roomId) return;
+    try {
+      const res = await fetch(`/api/results?roomId=${encodeURIComponent(roomId)}`);
+      const data = await res.json();
 
-    const loadRoomResults = async () => {
-      try {
-        setLoading(true);
-        const res = await fetch(`/api/results?roomId=${encodeURIComponent(roomId)}`);
-        const data = await res.json();
-
+      if (!res.ok || !data.success || !Array.isArray(data.results) || data.results.length === 0) {
         if (!res.ok || !data.success) {
           setErrorStatus({
             code: data.code || 'ACCESS_DENIED',
             message: data.message || 'Unable to access results for this room.',
           });
-          return;
         }
-
-        setResults(data.results || []);
-        if (data.room) setRoom(data.room);
-      } catch (err: any) {
-        setErrorStatus({
-          code: 'NETWORK_ERROR',
-          message: err.message || 'Failed to connect to results server.',
-        });
-      } finally {
-        setLoading(false);
+        return;
       }
+
+      setResults(data.results);
+      setErrorStatus(null);
+      if (data.room) setRoom(data.room);
+    } catch (err: any) {
+      setErrorStatus({
+        code: 'NETWORK_ERROR',
+        message: err.message || 'Failed to connect to results server.',
+      });
+    } finally {
+      setLoading(false);
+    }
+  }, [roomId]);
+
+  useEffect(() => {
+    loadRoomResults();
+
+    const handleRealtimeReveal = () => {
+      loadRoomResults();
     };
 
-    loadRoomResults();
-  }, [roomId]);
+    window.addEventListener('pnp_results_revealed', handleRealtimeReveal);
+    window.addEventListener('pnp_room_status_changed', handleRealtimeReveal);
+
+    const interval = setInterval(() => {
+      if (results.length === 0) {
+        loadRoomResults();
+      }
+    }, 5000);
+
+    return () => {
+      window.removeEventListener('pnp_results_revealed', handleRealtimeReveal);
+      window.removeEventListener('pnp_room_status_changed', handleRealtimeReveal);
+      clearInterval(interval);
+    };
+  }, [loadRoomResults, results.length]);
 
   useEffect(() => {
     if (!results.length) return;

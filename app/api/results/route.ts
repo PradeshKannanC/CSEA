@@ -44,48 +44,55 @@ export async function GET(req: NextRequest) {
         );
       }
 
-      if (context.state === 'TEAM_NOT_ASSIGNED' || !context.team) {
-        return NextResponse.json(
-          {
-            success: false,
-            code: 'NO_TEAM_ASSIGNED',
-            message: 'You are not assigned to any team.',
-            revealed: false,
-            results: [],
-          },
-          { status: 403 }
-        );
-      }
+      // Check if global event is already REVEALED
+      const isGlobalEventRevealed = targetEvent?.status === 'REVEALED';
 
-      // Check if team has historical results in any revealed room
-      const teamPastResults = await prisma.result.findMany({
-        where: {
-          OR: [
-            { teamId: context.team.id },
-            { teamCode: context.team.teamId },
-          ],
-          revealedAt: { not: null },
-        },
-        include: { room: true },
-        orderBy: { createdAt: 'desc' },
-      });
+      // 1. Authoritative participant context resolution
+      const userTeam = context.team;
+      const userRoom = context.room;
+      const userAssignedRoomId = userRoom?.id || user?.roomId || null;
+
+      // Check historical results for team
+      const teamPastResults = userTeam
+        ? await prisma.result.findMany({
+            where: {
+              OR: [
+                { teamId: userTeam.id },
+                { teamCode: userTeam.teamId },
+              ],
+              revealedAt: { not: null },
+            },
+            include: { room: true },
+            orderBy: { createdAt: 'desc' },
+          })
+        : [];
 
       const historicalRoomIds = new Set(
         teamPastResults.map((r) => r.roomId).filter((id): id is string => Boolean(id))
       );
 
+      // Check if user has investments in any rooms (for investors)
+      const userInvestments = await prisma.investment.findMany({
+        where: { investorId: context.user.id },
+        select: { roomId: true },
+      });
+      const investedRoomIds = new Set(
+        userInvestments.map((inv) => inv.roomId).filter((id): id is string => Boolean(id))
+      );
+
       // Determine targetRoomId
       if (requestedRoomId) {
-        // Can view if it's current room or a room they historically participated in
-        const isCurrentRoom = context.room && context.room.id === requestedRoomId;
+        // Can view if it's current room, a room they historically participated in, or a room they invested in, or if global event is revealed
+        const isCurrentRoom = userAssignedRoomId === requestedRoomId;
         const isHistoricalRoom = historicalRoomIds.has(requestedRoomId);
+        const isInvestedRoom = investedRoomIds.has(requestedRoomId);
 
-        if (!isCurrentRoom && !isHistoricalRoom) {
+        if (!isCurrentRoom && !isHistoricalRoom && !isInvestedRoom && !isGlobalEventRevealed) {
           return NextResponse.json(
             {
               success: false,
               code: 'CROSS_ROOM_RESULTS_FORBIDDEN',
-              message: 'You are only authorized to view results for rooms your team participated in.',
+              message: 'You are only authorized to view results for rooms you participated in.',
               revealed: false,
               results: [],
             },
@@ -93,10 +100,15 @@ export async function GET(req: NextRequest) {
           );
         }
 
-        // Verify that target room is REVEALED to participants
+        // Verify that target room is REVEALED to participants (or global event is revealed)
         const targetRoom = await prisma.room.findUnique({ where: { id: requestedRoomId } });
+        const isRoomRevealedToParticipants =
+          targetRoom?.resultsRevealedToParticipants ||
+          targetRoom?.status === 'REVEALED' ||
+          Boolean(targetRoom?.revealedAt) ||
+          isGlobalEventRevealed;
 
-        if (!targetRoom || !targetRoom.resultsRevealedToParticipants || targetRoom.status !== 'REVEALED') {
+        if (!targetRoom || !isRoomRevealedToParticipants) {
           const isUnderReview = targetRoom?.resultsRevealedToAdmins && !targetRoom.resultsRevealedToParticipants;
           return NextResponse.json(
             {
@@ -117,12 +129,18 @@ export async function GET(req: NextRequest) {
         userRoomRecord = targetRoom;
       } else {
         // Default room resolution:
-        const currentRoomDb = context.room
-          ? await prisma.room.findUnique({ where: { id: context.room.id } })
+        const currentRoomDb = userAssignedRoomId
+          ? await prisma.room.findUnique({ where: { id: userAssignedRoomId } })
           : null;
 
         if (currentRoomDb) {
-          if (currentRoomDb.resultsRevealedToParticipants && currentRoomDb.status === 'REVEALED') {
+          const isRoomRevealedToParticipants =
+            currentRoomDb.resultsRevealedToParticipants ||
+            currentRoomDb.status === 'REVEALED' ||
+            Boolean(currentRoomDb.revealedAt) ||
+            isGlobalEventRevealed;
+
+          if (isRoomRevealedToParticipants) {
             targetRoomId = currentRoomDb.id;
             userRoomRecord = currentRoomDb;
           } else {
@@ -146,12 +164,15 @@ export async function GET(req: NextRequest) {
           const mostRecent = teamPastResults[0];
           targetRoomId = mostRecent.roomId;
           userRoomRecord = mostRecent.room || (targetRoomId ? await prisma.room.findUnique({ where: { id: targetRoomId } }) : null);
+        } else if (isGlobalEventRevealed) {
+          // Global event is revealed, allow viewing tournament-wide results
+          targetRoomId = null;
         } else {
           return NextResponse.json(
             {
               success: false,
-              code: 'NO_ROOM_ASSIGNED',
-              message: 'Your team is not assigned to any room arena and has no published results.',
+              code: 'RESULTS_NOT_REVEALED',
+              message: 'Tournament results have not been revealed yet.',
               revealed: false,
               results: [],
             },
@@ -176,7 +197,7 @@ export async function GET(req: NextRequest) {
       whereClause.revealedAt = { not: null };
     }
 
-    const results = await prisma.result.findMany({
+    let results = await prisma.result.findMany({
       where: whereClause,
       orderBy: { rank: 'asc' },
       include: {
@@ -191,6 +212,28 @@ export async function GET(req: NextRequest) {
         },
       },
     });
+
+    // If targetRoomId had 0 results, but event is revealed or room is revealed, check if results exist across the event
+    if (results.length === 0 && targetRoomId && (targetEvent?.status === 'REVEALED' || userRoomRecord?.status === 'REVEALED')) {
+      const fallbackResults = await prisma.result.findMany({
+        where: !isAdmin ? { revealedAt: { not: null } } : {},
+        orderBy: { rank: 'asc' },
+        include: {
+          room: true,
+          idea: {
+            select: {
+              id: true,
+              anonymousId: true,
+              title: true,
+              track: true,
+            },
+          },
+        },
+      });
+      if (fallbackResults.length > 0) {
+        results = fallbackResults;
+      }
+    }
 
     const formattedResults = results.map((r) => {
       let members: string[] = [];

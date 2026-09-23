@@ -38,6 +38,7 @@ export const VenturaLogo: React.FC<VenturaLogoProps> = ({
           width={48}
           height={48}
           priority
+          unoptimized
           className="object-contain rounded-full w-full h-full"
         />
       </div>

@@ -293,21 +293,9 @@ export default function AdminControlCenterPage() {
   };
 
   const handleExportCSV = () => {
-    const headers = 'Idea ID,Title,Track,Total Coins,Investors,Velocity\n';
-    const rows = ideas
-      .map(
-        (i) =>
-          `"${i.anonymousId}","${i.title}","${i.track}",${i.totalInvested},${i.investorCount},"${i.velocity}"`
-      )
-      .join('\n');
-
-    const blob = new Blob([headers + rows], { type: 'text/csv' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `pitch_and_prosper_audit_${Date.now()}.csv`;
-    a.click();
-    toast.info('CSV Exported', 'Audit ledger downloaded to your device.');
+    // Authoritative direct download from server export endpoint — never empty or dependent on client state
+    window.location.href = '/api/admin/export?type=ideas';
+    toast.info('CSV Exporting', 'Downloading authoritative arena ledger...');
   };
 
   return (

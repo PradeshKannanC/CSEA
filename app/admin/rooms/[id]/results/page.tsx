@@ -18,6 +18,7 @@ import {
   Clock,
   ShieldCheck,
   DoorOpen,
+  Download,
 } from 'lucide-react';
 
 interface ResultItem {
@@ -116,6 +117,11 @@ export default function AdminRoomResultsPage() {
     }
   };
 
+  const handleExportRoomResultsCSV = () => {
+    window.location.href = `/api/admin/export?type=results&roomId=${encodeURIComponent(roomId)}`;
+    toast.info('Downloading CSV', `Exporting official results for room ${room?.name || ''}...`);
+  };
+
   useEffect(() => {
     fetchResults();
   }, [roomId]);
@@ -148,6 +154,15 @@ export default function AdminRoomResultsPage() {
                 Room Details
               </Button>
             </Link>
+            <Button
+              variant="outline"
+              size="sm"
+              pill
+              onClick={handleExportRoomResultsCSV}
+              icon={<Download size={12} />}
+            >
+              Export CSV
+            </Button>
             <Button
               variant="outline"
               size="sm"
@@ -367,6 +382,17 @@ export default function AdminRoomResultsPage() {
                     Deterministic ranking: Total Coins Invested &rarr; Unique Investor Count &rarr; Submission Time
                   </p>
                 </div>
+                {results.length > 0 && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    pill
+                    onClick={handleExportRoomResultsCSV}
+                    icon={<Download size={12} />}
+                  >
+                    Download CSV
+                  </Button>
+                )}
               </div>
 
               <div className="overflow-x-auto">

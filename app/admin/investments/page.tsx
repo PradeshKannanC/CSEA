@@ -8,7 +8,7 @@ import { CoinIcon } from '@/components/brand/CoinIcon';
 import { EmptyState } from '@/components/feedback/EmptyState';
 import { useVentura } from '@/lib/store';
 import { useToast } from '@/components/feedback/Toast';
-import { Search, History, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { Search, History, ArrowUpDown, ArrowUp, ArrowDown, Download } from 'lucide-react';
 
 type SortField = 'timestamp' | 'amount';
 type SortOrder = 'asc' | 'desc';
@@ -71,6 +71,18 @@ export default function AdminInvestmentsLedgerPage() {
           </div>
 
           <div className="flex items-center gap-3">
+            <Button
+              variant="outline"
+              size="sm"
+              pill
+              onClick={() => {
+                window.location.href = '/api/admin/export?type=investments';
+                toast.info('Downloading CSV', 'Generating investment transaction ledger CSV...');
+              }}
+              icon={<Download className="w-3.5 h-3.5" />}
+            >
+              Export Ledger CSV
+            </Button>
             <div className="relative w-full sm:w-64">
               <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
               <input

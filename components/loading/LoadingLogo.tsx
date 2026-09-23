@@ -53,6 +53,7 @@ export const LoadingLogo: React.FC<LoadingLogoProps> = ({
             width={size}
             height={size}
             priority
+            unoptimized
             className="object-contain w-full h-full rounded-full pointer-events-none"
           />
         </div>

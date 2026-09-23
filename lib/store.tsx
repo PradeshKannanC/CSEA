@@ -426,7 +426,14 @@ export function VenturaProvider({ children }: { children: React.ReactNode }) {
             .catch(() => {});
         } else if (data.type === 'RESULTS_REVEALED') {
           setEventConfigState((prev) => ({ ...prev, status: 'REVEALED' }));
+          setCurrentUser((prev) => {
+            if (!data.payload?.roomId || prev.roomId === data.payload.roomId) {
+              return { ...prev, roomStatus: 'REVEALED' };
+            }
+            return prev;
+          });
           refreshData();
+          window.dispatchEvent(new CustomEvent('pnp_results_revealed', { detail: data.payload }));
         } else if (data.type === 'NEW_ARENA_INITIALIZED') {
           const newTotalCoins = data.payload.totalCoins;
           setEventConfigState((prev) => ({
@@ -488,6 +495,9 @@ export function VenturaProvider({ children }: { children: React.ReactNode }) {
           });
           refreshData();
           window.dispatchEvent(new CustomEvent('pnp_room_status_changed', { detail: data.payload }));
+          if (data.payload?.status === 'REVEALED') {
+            window.dispatchEvent(new CustomEvent('pnp_results_revealed', { detail: data.payload }));
+          }
         } else if (data.type === 'IDEA_INVESTED') {
           if (data.payload.ideaId) {
             setIdeas((prev) => prev.filter((i) => i.id !== data.payload.ideaId && i.anonymousId !== data.payload.anonymousId));

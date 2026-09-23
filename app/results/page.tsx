@@ -1,13 +1,13 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import { VenturaLogo } from '@/components/brand/VenturaLogo';
 import { Button } from '@/components/ui/Button';
 import { CoinIcon } from '@/components/brand/CoinIcon';
 import { triggerChampionshipReveal } from '@/lib/confetti';
-import { Trophy, Sparkles, Users, Award, RotateCcw, ArrowLeft } from 'lucide-react';
+import { Trophy, Sparkles, Users, Award, RotateCcw, ArrowLeft, Clock, ShieldAlert } from 'lucide-react';
 import { useVentura } from '@/lib/store';
 
 interface PublicResultRow {
@@ -33,27 +33,53 @@ export default function FinalResultsPage() {
   const [userRoom, setUserRoom] = useState<{ id: string; name: string; code: string } | null>(null);
   const [roomGroups, setRoomGroups] = useState<any[]>([]);
   const [selectedAdminRoomId, setSelectedAdminRoomId] = useState<string>('ALL');
+  const [statusInfo, setStatusInfo] = useState<{ code: string; message: string } | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const loadResults = async () => {
-      try {
-        const res = await fetch('/api/results');
-        const data = await res.json();
-        if (res.ok && data.success && Array.isArray(data.results)) {
-          setResults(data.results);
-          if (data.room) setUserRoom(data.room);
-          if (data.roomGroups) setRoomGroups(data.roomGroups);
+  const loadResults = useCallback(async () => {
+    try {
+      const res = await fetch('/api/results');
+      const data = await res.json();
+      if (res.ok && data.success && Array.isArray(data.results) && data.results.length > 0) {
+        setResults(data.results);
+        setStatusInfo(null);
+        if (data.room) setUserRoom(data.room);
+        if (data.roomGroups) setRoomGroups(data.roomGroups);
+      } else {
+        if (data.code || data.message) {
+          setStatusInfo({ code: data.code || 'PENDING', message: data.message || '' });
         }
-      } catch (error) {
-        console.error('Failed to load public results:', error);
-      } finally {
-        setLoading(false);
       }
+    } catch (error) {
+      console.error('Failed to load public results:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadResults();
+
+    const handleRealtimeReveal = () => {
+      loadResults();
     };
 
-    loadResults();
-  }, []);
+    window.addEventListener('pnp_results_revealed', handleRealtimeReveal);
+    window.addEventListener('pnp_room_status_changed', handleRealtimeReveal);
+
+    // Auto-poll every 5 seconds if results haven't loaded yet
+    const interval = setInterval(() => {
+      if (results.length === 0) {
+        loadResults();
+      }
+    }, 5000);
+
+    return () => {
+      window.removeEventListener('pnp_results_revealed', handleRealtimeReveal);
+      window.removeEventListener('pnp_room_status_changed', handleRealtimeReveal);
+      clearInterval(interval);
+    };
+  }, [loadResults, results.length]);
 
   const displayedResults =
     currentUser.role === 'ADMIN' && selectedAdminRoomId !== 'ALL'
@@ -135,10 +161,13 @@ export default function FinalResultsPage() {
             <Trophy className="w-8 h-8" />
           </div>
           <h1 className="font-display font-black text-2xl sm:text-3xl text-slate-900 mb-2">
-            Results Awaiting Reveal
+            {statusInfo?.code === 'RESULTS_UNDER_ADMIN_REVIEW'
+              ? 'Results Under Administrative Review'
+              : 'Results Awaiting Reveal'}
           </h1>
           <p className="text-xs text-slate-500 leading-relaxed mb-6">
-            The grand championship rankings and unmasked team identities will be revealed here once administrators conclude the arena and initiate the ceremony.
+            {statusInfo?.message ||
+              'The grand championship rankings and unmasked team identities will be revealed here once administrators conclude the arena and initiate the ceremony.'}
           </p>
           {currentUser.role === 'ADMIN' ? (
             <Link href="/admin">

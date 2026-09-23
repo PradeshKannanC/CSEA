@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/Badge';
 import { CoinIcon } from '@/components/brand/CoinIcon';
 import { useVentura } from '@/lib/store';
 import { useToast } from '@/components/feedback/Toast';
-import { Trophy, Sparkles, Eye, ArrowLeft, Users, CheckCircle2, ShieldAlert, History } from 'lucide-react';
+import { Trophy, Sparkles, Eye, ArrowLeft, Users, CheckCircle2, ShieldAlert, History, Download } from 'lucide-react';
 import { EmptyState } from '@/components/feedback/EmptyState';
 
 interface AdminResultRow {
@@ -111,6 +111,19 @@ export default function AdminResultsPage() {
     }
   };
 
+  const handleExportResultsCSV = () => {
+    const params = new URLSearchParams();
+    params.set('type', 'results');
+    if (selectedRoomId && selectedRoomId !== 'ALL') {
+      params.set('roomId', selectedRoomId);
+    }
+    if (selectedEventId) {
+      params.set('eventId', selectedEventId);
+    }
+    window.location.href = `/api/admin/export?${params.toString()}`;
+    toast.info('Downloading CSV', 'Generating official tournament results CSV export...');
+  };
+
   const displayedResults =
     selectedRoomId === 'ALL'
       ? results
@@ -161,6 +174,16 @@ export default function AdminResultsPage() {
                 ← Back to Control Center
               </Button>
             </Link>
+
+            <Button
+              variant="outline"
+              size="sm"
+              pill
+              onClick={handleExportResultsCSV}
+              icon={<Download className="w-3.5 h-3.5" />}
+            >
+              Export Results CSV
+            </Button>
 
             {selectedStatus === 'ADMIN_REVEALED' && (
               <Button
@@ -499,7 +522,18 @@ export default function AdminResultsPage() {
                     Authoritative tournament order calculated from verified database coin investments.
                   </p>
                 </div>
-                <Badge variant="admin">CONFIDENTIAL AUDIT</Badge>
+                <div className="flex items-center gap-3">
+                  <Badge variant="admin">CONFIDENTIAL AUDIT</Badge>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    pill
+                    onClick={handleExportResultsCSV}
+                    icon={<Download className="w-3.5 h-3.5" />}
+                  >
+                    Download CSV
+                  </Button>
+                </div>
               </div>
 
               <div className="overflow-x-auto">

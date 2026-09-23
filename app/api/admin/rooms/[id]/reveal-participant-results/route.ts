@@ -53,10 +53,88 @@ export async function POST(
         data: { revealedAt: now },
       });
 
-      const finalResults = await tx.result.findMany({
+      let finalResults = await tx.result.findMany({
         where: { roomId: id },
         orderBy: { rank: 'asc' },
       });
+
+      if (finalResults.length === 0) {
+        const roomWithTeams = await tx.room.findUnique({
+          where: { id },
+          include: {
+            teams: {
+              include: {
+                roster: true,
+                idea: {
+                  include: { investments: true },
+                },
+              },
+            },
+          },
+        });
+
+        const event = await tx.event.findFirst({ orderBy: { createdAt: 'desc' } });
+
+        if (roomWithTeams) {
+          const approvedTeamIdeas = roomWithTeams.teams
+            .filter((t) => t.idea && t.idea.status === 'APPROVED')
+            .map((t) => {
+              const idea = t.idea!;
+              const validInvestments = idea.investments.filter(
+                (inv) => !event || inv.eventId === event.id || inv.eventId === null
+              );
+              const totalCoins = validInvestments.reduce((sum, inv) => sum + inv.amount, 0);
+              const investorCount = new Set(validInvestments.map((inv) => inv.investorId)).size;
+              return {
+                idea,
+                team: t,
+                totalCoins,
+                investorCount,
+                createdAt: idea.createdAt.getTime(),
+              };
+            });
+
+          approvedTeamIdeas.sort((a, b) => {
+            if (b.totalCoins !== a.totalCoins) return b.totalCoins - a.totalCoins;
+            if (b.investorCount !== a.investorCount) return b.investorCount - a.investorCount;
+            return a.createdAt - b.createdAt;
+          });
+
+          for (let i = 0; i < approvedTeamIdeas.length; i++) {
+            const item = approvedTeamIdeas[i];
+            const rank = i + 1;
+            const trophy = rank === 1 ? 'gold' : rank === 2 ? 'silver' : rank === 3 ? 'bronze' : 'finalist';
+            const memberNames = item.team.roster.map((m) => m.name);
+
+            const res = await tx.result.create({
+              data: {
+                eventId: event?.id || roomWithTeams.eventId || null,
+                roomId: id,
+                teamId: item.team.id,
+                teamCode: item.team.teamId,
+                teamName: item.team.name,
+                ideaId: item.idea.id,
+                ideaTitle: item.idea.title,
+                anonymousId: item.idea.anonymousId,
+                rank,
+                totalCoins: item.totalCoins,
+                investorCount: item.investorCount,
+                members: memberNames,
+                track: item.idea.track,
+                trophy,
+                revealedAt: now,
+              },
+            });
+
+            await tx.idea.update({
+              where: { id: item.idea.id },
+              data: { rank },
+            });
+
+            finalResults.push(res);
+          }
+        }
+      }
 
       // Update room to REVEALED with participant reveal flag
       const r = await tx.room.update({

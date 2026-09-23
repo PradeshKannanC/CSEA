@@ -18,6 +18,7 @@ import {
   Sparkles,
   PieChart,
   History,
+  Trophy,
 } from 'lucide-react';
 
 export default function ParticipantDashboardPage() {
@@ -30,11 +31,52 @@ export default function ParticipantDashboardPage() {
     }
   }, [currentUser?.role]);
 
+  const isRevealed = currentUser.roomStatus === 'REVEALED' || eventConfig.status === 'REVEALED';
+
   return (
     <div className="min-h-screen flex flex-col bg-[#F7F8FC]">
       <DashboardNav />
 
       <main className="flex-1 py-6 sm:py-8 lg:py-10 px-3 sm:px-6 lg:px-8 max-w-7xl mx-auto w-full space-y-6 sm:space-y-8 lg:space-y-10">
+        {/* Championship Results Revealed Alert Banner */}
+        {isRevealed && (
+          <div className="bg-linear-to-r from-purple-900 via-indigo-900 to-slate-900 text-white rounded-3xl p-6 sm:p-8 shadow-xl border border-purple-500/30 flex flex-col md:flex-row md:items-center justify-between gap-6 relative overflow-hidden animate-in fade-in slide-in-from-top-4 duration-300">
+            <div className="flex items-start sm:items-center gap-4 relative z-10">
+              <div className="w-14 h-14 rounded-2xl bg-amber-400 text-amber-950 flex items-center justify-center shrink-0 shadow-lg ring-4 ring-amber-400/20">
+                <Trophy className="w-7 h-7" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-[10px] sm:text-xs font-bold uppercase tracking-widest text-amber-300 flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5" />
+                    Championship Announcement
+                  </span>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase bg-purple-500/40 text-purple-200 border border-purple-400/30">
+                    Live Rankings
+                  </span>
+                </div>
+                <h2 className="text-xl sm:text-2xl font-display font-black text-white tracking-tight">
+                  Tournament Results &amp; Winners Revealed!
+                </h2>
+                <p className="text-xs sm:text-sm text-purple-200 mt-1 max-w-xl">
+                  The investment arena has concluded. The grand championship rankings, unmasked team identities, and innovation awards are now available.
+                </p>
+              </div>
+            </div>
+            <Link href="/results" className="shrink-0 relative z-10">
+              <Button
+                variant="primary"
+                size="md"
+                pill
+                className="bg-amber-400 hover:bg-amber-300 text-amber-950 font-black shadow-[0_4px_20px_rgba(251,191,36,0.35)] gap-2 py-3 px-6"
+                iconRight={<ArrowRight className="w-4 h-4" />}
+              >
+                View Championship Results
+              </Button>
+            </Link>
+          </div>
+        )}
+
         {/* Top Section matching participant-dashboard.png */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-start">
           {/* Left Column: Greeting & Parameters */}
@@ -197,16 +239,20 @@ export default function ParticipantDashboardPage() {
                 </div>
               </div>
 
-              {/* Deploy Capital CTA Button matching screenshot */}
-              <Link href="/arena" className="block w-full">
+              {/* Deploy Capital or View Results CTA Button */}
+              <Link href={isRevealed ? "/results" : "/arena"} className="block w-full">
                 <Button
                   variant="primary"
                   size="lg"
                   pill
-                  className="w-full justify-center py-3.5 shadow-[0_8px_24px_rgba(99,91,255,0.4)] text-sm font-bold"
+                  className={`w-full justify-center py-3.5 text-sm font-bold ${
+                    isRevealed
+                      ? 'bg-amber-400 hover:bg-amber-300 text-amber-950 shadow-[0_8px_24px_rgba(251,191,36,0.3)]'
+                      : 'shadow-[0_8px_24px_rgba(99,91,255,0.4)]'
+                  }`}
                   iconRight={<ArrowRight className="w-4 h-4" />}
                 >
-                  Deploy Capital
+                  {isRevealed ? 'View Final Results & Winners' : 'Deploy Capital'}
                 </Button>
               </Link>
 

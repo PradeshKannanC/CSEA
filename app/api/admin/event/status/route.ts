@@ -359,8 +359,13 @@ export async function POST(req: NextRequest) {
             await tx.result.create({
               data: {
                 eventId: currentEvent.id,
-                rank,
+                roomId: item.idea.roomId || item.idea.team.roomId || null,
+                teamId: item.idea.team.id,
+                teamCode: item.idea.team.teamId,
                 ideaId: item.idea.id,
+                ideaTitle: item.idea.title,
+                anonymousId: item.idea.anonymousId,
+                rank,
                 teamName: item.idea.team.name,
                 members: memberNames,
                 track: item.idea.track,
@@ -381,6 +386,17 @@ export async function POST(req: NextRequest) {
             });
           }
         }
+
+        // Authoritatively synchronize all rooms to REVEALED
+        await tx.room.updateMany({
+          where: currentEvent.id ? { OR: [{ eventId: currentEvent.id }, { eventId: null }] } : {},
+          data: {
+            status: 'REVEALED',
+            resultsRevealedToParticipants: true,
+            revealedAt: now,
+            participantRevealedAt: now,
+          },
+        });
       }
 
       // Record audit log

@@ -28,7 +28,7 @@ export const DashboardNav: React.FC = () => {
     navLinks.push({ name: 'My Team', href: '/team' });
   }
 
-  if (eventConfig.status === 'REVEALED') {
+  if (eventConfig.status === 'REVEALED' || currentUser.roomStatus === 'REVEALED' || currentUser.role === 'ADMIN') {
     navLinks.push({ name: 'Results Reveal', href: '/results' });
   }
 
